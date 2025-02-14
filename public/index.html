@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>College Chat</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.8.1/socket.io.js"></script>
+    <style>
+        :root {
+            --primary-blue: #1e40af;
+            --light-blue: #e0f2fe;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f9ff;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 20px;
+        }
+
+        #login-form, #chat-box {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        #chat-box {
+            display: none;
+        }
+
+        .chat-messages {
+            height: 400px;
+            overflow-y: auto;
+            padding: 20px;
+            background: var(--light-blue);
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+
+        .message {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 8px;
+            max-width: 70%;
+        }
+
+        .message.sent {
+            background: var(--primary-blue);
+            color: white;
+            margin-left: auto;
+        }
+
+        .message.received {
+            background: white;
+        }
+
+        input, button {
+            width: 100%;
+            padding: 10px;
+            margin: 5px 0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        button {
+            background: var(--primary-blue);
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+
+        button:hover {
+            opacity: 0.9;
+        }
+
+        #status {
+            text-align: center;
+            padding: 10px;
+            color: #666;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 10px;
+                margin: 10px;
+            }
+            
+            .message {
+                max-width: 85%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div id="login-form">
+            <h2>Join College Chat</h2>
+            <input type="email" id="email" placeholder="College Email" required>
+            <input type="text" id="username" placeholder="Username" required>
+            <button onclick="register()">Join Chat</button>
+        </div>
+
+        <div id="chat-box">
+            <div id="status">Connecting...</div>
+            <div id="chat-messages" class="chat-messages"></div>
+            <input type="text" id="message-input" placeholder="Type a message...">
+            <button onclick="sendMessage()">Send</button>
+            <button onclick="findNewChat()">Find New Chat</button>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        let currentRoomId = null;
+
+        function register() {
+            const email = document.getElementById('email').value;
+            const username = document.getElementById('username').value;
+            
+            if (!email || !username) {
+                alert('Please fill in all fields');
+                return;
+            }
+
+            socket.emit('register', { collegeEmail: email, username });
+        }
+
+        function findNewChat() {
+            document.getElementById('chat-messages').innerHTML = '';
+            document.getElementById('status').textContent = 'Finding a chat partner...';
+            socket.emit('findChat');
+        }
+
+        function sendMessage() {
+            const input = document.getElementById('message-input');
+            const message = input.value.trim();
+            
+            if (message && currentRoomId) {
+                socket.emit('message', { roomId: currentRoomId, message });
+                input.value = '';
+            }
+        }
+
+        socket.on('registerSuccess', (data) => {
+            document.getElementById('login-form').style.display = 'none';
+            document.getElementById('chat-box').style.display = 'block';
+            findNewChat();
+        });
+
+        socket.on('waiting', () => {
+            document.getElementById('status').textContent = 'Waiting for a chat partner...';
+        });
+
+        socket.on('chatStarted', (data) => {
+            currentRoomId = data.roomId;
+            document.getElementById('status').textContent = 'Connected to a chat partner';
+        });
+
+        socket.on('message', (data) => {
+            const messagesDiv = document.getElementById('chat-messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.classList.add('message');
+            messageDiv.classList.add(data.userId === socket.userId ? 'sent' : 'received');
+            messageDiv.textContent = data.message;
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        });
+
+        socket.on('partnerDisconnected', () => {
+            document.getElementById('status').textContent = 'Chat partner disconnected. Click "Find New Chat" to start a new chat.';
+        });
+
+        socket.on('error', (message) => {
+            alert(message);
+        });
+
+        document.getElementById('message-input').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+    </script>
+</body>
+</html>
