@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>College Chat</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+    <style>
+        :root {
+            --dark-bg: #0A1929;  /* Darker blue background */
+            --darker-bg: #061325; /* Even darker blue for contrast */
+            --chat-blue: #1E88E5; /* Primary blue */
+            --chat-blue-dark: #1565C0; /* Darker blue for sent messages */
+            --received-msg: #132F4C; /* Dark blue for received messages */
+            --text-light: #ffffff;
+            --text-gray: #B2BAC2;
+            --input-bg: #132F4C;
+            --border-color: #234567;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: Arial, sans-serif;
+        }
+
+        body {
+            background-color: var(--dark-bg);
+            color: var(--text-light);
+            height: 100vh;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #login-form {
+            background: var(--darker-bg);
+            padding: 2rem;
+            border-radius: 12px;
+            max-width: 400px;
+            margin: auto;
+            width: 90%;
+            transform: translateY(0);
+            opacity: 1;
+            transition: all 0.3s ease-in-out;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+        }
+
+        #login-form.hidden {
+            transform: translateY(-20px);
+            opacity: 0;
+        }
+
+        #chat-container {
+            display: none;
+            flex-direction: column;
+            height: 100vh;
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 0.3s ease-in-out;
+            background: var(--darker-bg);
+            border-radius: 12px;
+            margin: 1rem;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+        }
+
+        #chat-container.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .header {
+            background: var(--darker-bg);
+            padding: 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border-color);
+            border-radius: 12px 12px 0 0;
+        }
+
+        .online-count {
+            color: var(--chat-blue);
+            font-weight: 500;
+        }
+
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            background: var(--dark-bg);
+        }
+
+        .chat-messages::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .chat-messages::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border-radius: 3px;
+        }
+
+        .message-wrapper {
+            display: flex;
+            flex-direction: column;
+            max-width: 70%;
+        }
+
+        .message-wrapper.sent {
+            align-self: flex-end;
+            align-items: flex-end;
+        }
+
+        .message-wrapper.received {
+            align-self: flex-start;
+            align-items: flex-start;
+        }
+
+        .message {
+            padding: 0.8rem 1.2rem;
+            border-radius: 16px;
+            word-wrap: break-word;
+            animation: messageAppear 0.3s ease-out;
+            position: relative;
+            margin-bottom: 0.2rem;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+
+        .message.sent {
+            background: var(--chat-blue);
+            color: white;
+            border-bottom-right-radius: 4px;
+            animation: slideFadeRight 0.3s ease-out;
+        }
+
+        .message.received {
+            background: var(--received-msg);
+            color: white;
+            border-bottom-left-radius: 4px;
+            animation: slideFadeLeft 0.3s ease-out;
+        }
+
+        @keyframes slideFadeRight {
+            from {
+                opacity: 0;
+                transform: translateX(100px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        @keyframes slideFadeLeft {
+            from {
+                opacity: 0;
+                transform: translateX(-100px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .input-container {
+            background: var(--darker-bg);
+            padding: 1.2rem;
+            display: flex;
+            gap: 0.8rem;
+            border-top: 1px solid var(--border-color);
+            border-radius: 0 0 12px 12px;
+        }
+
+        input {
+            width: 100%;
+            padding: 1rem;
+            border: 1px solid var(--border-color);
+            border-radius: 24px;
+            background: var(--input-bg);
+            color: var(--text-light);
+            transition: all 0.2s ease;
+            font-size: 0.95rem;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: var(--chat-blue);
+            box-shadow: 0 0 0 2px rgba(30, 136, 229, 0.2);
+        }
+
+        button {
+            padding: 0.8rem 1.5rem;
+            border: none;
+            border-radius: 24px;
+            background: var(--chat-blue);
+            color: white;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-weight: 500;
+            min-width: 100px;
+        }
+
+        button:hover {
+            background: var(--chat-blue-dark);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(30, 136, 229, 0.2);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        .timestamp {
+            font-size: 0.75rem;
+            color: var(--text-gray);
+            margin-top: 0.2rem;
+        }
+
+        #status {
+            text-align: right;
+            color: var(--text-gray);
+            transition: color 0.3s ease;
+            font-size: 0.9rem;
+        }
+
+        #status.connecting {
+            color: var(--chat-blue);
+        }
+
+        #new-chat-btn {
+            background: var(--received-msg);
+        }
+
+        #new-chat-btn:hover {
+            background: var(--input-bg);
+        }
+
+        @media (max-width: 768px) {
+            .message-wrapper {
+                max-width: 85%;
+            }
+            
+            .input-container {
+                padding: 1rem;
+            }
+            
+            button {
+                padding: 0.8rem 1rem;
+                min-width: 80px;
+            }
+
+            #chat-container {
+                margin: 0;
+                border-radius: 0;
+            }
+
+            .header {
+                border-radius: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div id="login-form">
+            <h2 style="margin-bottom: 1.5rem; text-align: center; color: var(--chat-blue);">College Chat</h2>
+            <input type="email" id="email" placeholder="College Email" style="margin-bottom: 1rem;">
+            <input type="text" id="username" placeholder="Username" style="margin-bottom: 1.5rem;">
+            <button onclick="register()" style="width: 100%">Join Chat</button>
+        </div>
+
+        <div id="chat-container">
+            <div class="header">
+                <span class="online-count">Online Users: <span id="online-count">0</span></span>
+                <span id="status">Connecting...</span>
+            </div>
+            
+            <div id="chat-messages" class="chat-messages"></div>
+            
+            <div class="input-container">
+                <button id="new-chat-btn" onclick="findNewChat()">New Chat</button>
+                <input type="text" id="message-input" placeholder="Type a message...">
+                <button onclick="sendMessage()">Send</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const socket = io(); // Replace with your backend URL
+        let currentRoomId = null;
+
+        function register() {
+            const email = document.getElementById('email').value;
+            const username = document.getElementById('username').value;
+            
+            if (!email || !username) {
+                alert('Please fill in all fields');
+                return;
+            }
+
+            const loginForm = document.getElementById('login-form');
+            loginForm.classList.add('hidden');
+            
+            setTimeout(() => {
+                socket.emit('register', { collegeEmail: email, username });
+            }, 300);
+        }
+
+        function findNewChat() {
+            const messages = document.getElementById('chat-messages');
+            messages.style.opacity = '0';
+            
+            setTimeout(() => {
+                messages.innerHTML = '';
+                messages.style.opacity = '1';
+                document.getElementById('status').textContent = 'Finding a chat partner...';
+                document.getElementById('status').classList.add('connecting');
+                socket.emit('findChat');
+            }, 300);
+        }
+
+        function sendMessage() {
+            const input = document.getElementById('message-input');
+            const message = input.value.trim();
+            
+            if (message && currentRoomId) {
+                socket.emit('message', { roomId: currentRoomId, message });
+                input.value = '';
+            }
+        }
+
+        socket.on('registerSuccess', (data) => {
+            document.getElementById('login-form').style.display = 'none';
+            const chatContainer = document.getElementById('chat-container');
+            chatContainer.style.display = 'flex';
+            
+            setTimeout(() => {
+                chatContainer.classList.add('visible');
+                findNewChat();
+            }, 100);
+        });
+
+        socket.on('onlineUsers', (count) => {
+            document.getElementById('online-count').textContent = count;
+        });
+
+        socket.on('waiting', () => {
+            const status = document.getElementById('status');
+            status.textContent = 'Waiting for a chat partner...';
+            status.classList.add('connecting');
+        });
+
+        socket.on('chatStarted', (data) => {
+            currentRoomId = data.roomId;
+            const status = document.getElementById('status');
+            status.textContent = 'Connected to chat';
+            status.classList.remove('connecting');
+        });
+
+        socket.on('message', (data) => {
+            const messagesDiv = document.getElementById('chat-messages');
+            
+            const wrapperDiv = document.createElement('div');
+            wrapperDiv.classList.add('message-wrapper');
+            wrapperDiv.classList.add(data.userId === socket.id ? 'sent' : 'received');
+            
+            const messageDiv = document.createElement('div');
+            messageDiv.classList.add('message');
+            messageDiv.classList.add(data.userId === socket.id ? 'sent' : 'received');
+            messageDiv.textContent = data.message;
+            
+            const timestamp = document.createElement('div');
+            timestamp.classList.add('timestamp');
+            timestamp.textContent = new Date(data.timestamp).toLocaleTimeString();
+            
+            wrapperDiv.appendChild(messageDiv);
+            wrapperDiv.appendChild(timestamp);
+            messagesDiv.appendChild(wrapperDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        });
+
+        socket.on('partnerDisconnected', () => {
+            const status = document.getElementById('status');
+            status.textContent = 'Partner disconnected. Start new chat.';
+            status.classList.remove('connecting');
+        });
+
+        socket.on('error', (message) => {
+            alert(message);
+        });
+
+        // Handle enter key in message input
+        document.getElementById('message-input').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+    </script>
+</body>
+</html>
