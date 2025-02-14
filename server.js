@@ -1,4 +1,3 @@
-// server.js
 const express = require('express');
 const app = express();
 const http = require('http').createServer(app);
@@ -31,9 +30,12 @@ app.use(express.static('public'));
 // Store active users and their sockets
 const activeUsers = new Map();
 const waitingUsers = [];
+let onlineUsersCount = 0;
 
 io.on('connection', (socket) => {
     console.log('New user connected');
+    onlineUsersCount++;
+    io.emit('onlineUsers', onlineUsersCount);
 
     socket.on('register', async (data) => {
         try {
@@ -46,6 +48,7 @@ io.on('connection', (socket) => {
             socket.userId = user._id;
             activeUsers.set(socket.userId.toString(), socket);
             socket.emit('registerSuccess', { username: user.username });
+            io.emit('onlineUsers', onlineUsersCount);
         } catch (err) {
             console.error('Registration error:', err);
             socket.emit('error', 'Registration failed');
@@ -86,6 +89,9 @@ io.on('connection', (socket) => {
 
     socket.on('disconnect', () => {
         console.log('User disconnected');
+        onlineUsersCount--;
+        io.emit('onlineUsers', onlineUsersCount);
+        
         if (socket.roomId) {
             io.to(socket.roomId).emit('partnerDisconnected');
         }
